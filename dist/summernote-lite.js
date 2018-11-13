@@ -5,7 +5,7 @@
  * Copyright 2013- Alan Hong. and other contributors
  * summernote may be freely distributed under the MIT license.
  *
- * Date: 2018-02-20T00:34Z
+ * Date: 2018-11-13T11:05Z
  */
 (function (global, factory) {
 	typeof exports === 'object' && typeof module !== 'undefined' ? factory(require('jquery')) :
@@ -527,6 +527,12 @@ var colorDropdownButton = function (opt, type) {
                     '    </button>',
                     '  </div>',
                     '  <div class="note-holder" data-event="backColor"/>',
+                    '  <div class="btn-sm">',
+                    '    <input type="color" id="html5bcp" class="note-btn btn-default" value="#21104A" style="width:100%;" data-value="cp">',
+                    '    <button type="button" class="note-color-reset btn" data-event="backColor" data-value="cpbackColor">',
+                    opt.lang.color.cpSelect,
+                    '    </button>',
+                    '  </div>',
                     '</div>',
                     '<div class="note-btn-group btn-foreground-color">',
                     '  <div class="note-palette-title">' + opt.lang.color.foreground + '</div>',
@@ -537,6 +543,12 @@ var colorDropdownButton = function (opt, type) {
                     '    </button>',
                     '  </div>',
                     '  <div class="note-holder" data-event="foreColor"/>',
+                    '  <div class="btn-sm">',
+                    '    <input type="color" id="html5fcp" class="note-btn btn-default" value="#21104A" style="width:100%;" data-value="cp">',
+                    '    <button type="button" class="note-color-reset btn" data-event="foreColor" data-value="cpforeColor">',
+                    opt.lang.color.cpSelect,
+                    '    </button>',
+                    '  </div>',
                     '</div>',
                     '</div>'
                 ].join(''),
@@ -561,6 +573,17 @@ var colorDropdownButton = function (opt, type) {
                     var $button = $(event.target);
                     var eventName = $button.data('event');
                     var value = $button.data('value');
+                    var foreinput = document.getElementById('html5fcp').value;
+                    var backinput = document.getElementById('html5bcp').value;
+                    if (value === 'cp') {
+                        event.stopPropagation();
+                    }
+                    else if (value === 'cpbackColor') {
+                        value = backinput;
+                    }
+                    else if (value === 'cpforeColor') {
+                        value = foreinput;
+                    }
                     if (eventName && value) {
                         var key = eventName === 'backColor' ? 'background-color' : 'color';
                         var $color = $button.closest('.note-color').find('.note-recent-color');
@@ -685,7 +708,7 @@ var popover = renderer.create([
 });
 var checkbox = renderer.create('<div class="checkbox"></div>', function ($node, options) {
     $node.html([
-        ' <label' + (options.id ? ' for="' + options.id + '"' : '') + '>',
+        '<label' + (options.id ? ' for="' + options.id + '"' : '') + '>',
         ' <input role="checkbox" type="checkbox"' + (options.id ? ' id="' + options.id + '"' : ''),
         (options.checked ? ' checked' : ''),
         ' aria-checked="' + (options.checked ? 'true' : 'false') + '"/>',
@@ -903,7 +926,8 @@ $$1.extend($$1.summernote.lang, {
             transparent: 'Transparent',
             setTransparent: 'Set transparent',
             reset: 'Reset',
-            resetToDefault: 'Reset to default'
+            resetToDefault: 'Reset to default',
+            cpSelect: 'Select'
         },
         shortcut: {
             shortcuts: 'Keyboard shortcuts',
@@ -991,7 +1015,7 @@ var isEdge = /Edge\/\d+/.test(userAgent);
 var hasCodeMirror = !!window.CodeMirror;
 if (!hasCodeMirror && isSupportAmd) {
     // Webpack
-    if (typeof __webpack_require__ === 'function') {
+    if (typeof __webpack_require__ === 'function') { // eslint-disable-line
         try {
             // If CodeMirror can't be resolved, `require.resolve` will throw an
             // exception and `hasCodeMirror` won't be set to `true`.
@@ -1167,10 +1191,9 @@ function namespaceToCamel(namespace, prefix) {
  * @return {Function}
  */
 function debounce(func, wait, immediate) {
-    var _this = this;
     var timeout;
     return function () {
-        var context = _this;
+        var context = this;
         var args = arguments;
         var later = function () {
             timeout = null;
@@ -2144,11 +2167,16 @@ function fromOffsetPath(ancestor, offsets) {
  * @param {Object} [options]
  * @param {Boolean} [options.isSkipPaddingBlankHTML] - default: false
  * @param {Boolean} [options.isNotSplitEdgePoint] - default: false
+ * @param {Boolean} [options.isDiscardEmptySplits] - default: false
  * @return {Node} right node of boundaryPoint
  */
 function splitNode(point, options) {
     var isSkipPaddingBlankHTML = options && options.isSkipPaddingBlankHTML;
     var isNotSplitEdgePoint = options && options.isNotSplitEdgePoint;
+    var isDiscardEmptySplits = options && options.isDiscardEmptySplits;
+    if (isDiscardEmptySplits) {
+        isSkipPaddingBlankHTML = true;
+    }
     // edge case
     if (isEdgePoint(point) && (isText(point.node) || isNotSplitEdgePoint)) {
         if (isLeftEdgePoint(point)) {
@@ -2169,6 +2197,15 @@ function splitNode(point, options) {
         if (!isSkipPaddingBlankHTML) {
             paddingBlankHTML(point.node);
             paddingBlankHTML(clone);
+        }
+        if (isDiscardEmptySplits) {
+            if (isEmpty$1(point.node)) {
+                remove(point.node);
+            }
+            if (isEmpty$1(clone)) {
+                remove(clone);
+                return point.node.nextSibling;
+            }
         }
         return clone;
     }
@@ -2913,9 +2950,16 @@ var WrappedRange = /** @class */ (function () {
         var contentsContainer = $$1('<div></div>').html(markup)[0];
         var childNodes = lists.from(contentsContainer.childNodes);
         var rng = this.wrapBodyInlineWithPara().deleteContents();
-        return childNodes.reverse().map(function (childNode) {
+        if (rng.so > 0) {
+            childNodes = childNodes.reverse();
+        }
+        childNodes = childNodes.map(function (childNode) {
             return rng.insertNode(childNode);
-        }).reverse();
+        });
+        if (rng.so > 0) {
+            childNodes = childNodes.reverse();
+        }
+        return childNodes;
     };
     /**
      * returns text in range
@@ -3012,7 +3056,7 @@ var range = {
         if (arguments.length === 4) {
             return new WrappedRange(sc, so, ec, eo);
         }
-        else if (arguments.length === 2) {
+        else if (arguments.length === 2) { // collapsed
             ec = sc;
             eo = so;
             return new WrappedRange(sc, so, ec, eo);
@@ -3044,7 +3088,7 @@ var range = {
             ec = nativeRng.endContainer;
             eo = nativeRng.endOffset;
         }
-        else {
+        else { // IE8: TextRange
             var textRange = document.selection.createRange();
             var textRangeEnd = textRange.duplicate();
             textRangeEnd.collapse(false);
@@ -3226,6 +3270,18 @@ var History = /** @class */ (function () {
         this.stackOffset = 0;
         // Apply that snapshot.
         this.applySnapshot(this.stack[this.stackOffset]);
+    };
+    /**
+    *  @method commit
+    *  Resets history stack, but keeps current editor's content.
+    */
+    History.prototype.commit = function () {
+        // Clear the stack.
+        this.stack = [];
+        // Restore stackOffset to its original value.
+        this.stackOffset = -1;
+        // Record our first snapshot (of nothing).
+        this.recordUndo();
     };
     /**
     * @method reset
@@ -3450,7 +3506,17 @@ var Bullet = /** @class */ (function () {
         $$1.each(clustereds, function (idx, paras) {
             var head = lists.head(paras);
             if (dom.isLi(head)) {
-                _this.wrapList(paras, head.parentNode.nodeName);
+                var previousList_1 = _this.findList(head.previousSibling);
+                if (previousList_1) {
+                    paras
+                        .map(function (para) { return previousList_1.appendChild(para); });
+                }
+                else {
+                    _this.wrapList(paras, head.parentNode.nodeName);
+                    paras
+                        .map(function (para) { return para.parentNode; })
+                        .map(function (para) { return _this.appendToPrevious(para); });
+                }
             }
             else {
                 $$1.each(paras, function (idx, para) {
@@ -3554,47 +3620,115 @@ var Bullet = /** @class */ (function () {
      * @return {Node[]}
      */
     Bullet.prototype.releaseList = function (clustereds, isEscapseToBody) {
+        var _this = this;
         var releasedParas = [];
         $$1.each(clustereds, function (idx, paras) {
             var head = lists.head(paras);
             var last = lists.last(paras);
             var headList = isEscapseToBody ? dom.lastAncestor(head, dom.isList) : head.parentNode;
-            var lastList = headList.childNodes.length > 1 ? dom.splitTree(headList, {
-                node: last.parentNode,
-                offset: dom.position(last) + 1
-            }, {
-                isSkipPaddingBlankHTML: true
-            }) : null;
-            var middleList = dom.splitTree(headList, {
-                node: head.parentNode,
-                offset: dom.position(head)
-            }, {
-                isSkipPaddingBlankHTML: true
-            });
-            paras = isEscapseToBody ? dom.listDescendant(middleList, dom.isLi)
-                : lists.from(middleList.childNodes).filter(dom.isLi);
-            // LI to P
-            if (isEscapseToBody || !dom.isList(headList.parentNode)) {
-                paras = paras.map(function (para) {
-                    return dom.replace(para, 'P');
-                });
-            }
-            $$1.each(lists.from(paras).reverse(), function (idx, para) {
-                dom.insertAfter(para, headList);
-            });
-            // remove empty lists
-            var rootLists = lists.compact([headList, middleList, lastList]);
-            $$1.each(rootLists, function (idx, rootList) {
-                var listNodes = [rootList].concat(dom.listDescendant(rootList, dom.isList));
-                $$1.each(listNodes.reverse(), function (idx, listNode) {
-                    if (!dom.nodeLength(listNode)) {
-                        dom.remove(listNode, true);
+            var parentItem = headList.parentNode;
+            if (headList.parentNode.nodeName === 'LI') {
+                paras.map(function (para) {
+                    var newList = _this.findNextSiblings(para);
+                    if (parentItem.nextSibling) {
+                        parentItem.parentNode.insertBefore(para, parentItem.nextSibling);
+                    }
+                    else {
+                        parentItem.parentNode.appendChild(para);
+                    }
+                    if (newList.length) {
+                        _this.wrapList(newList, headList.nodeName);
+                        para.appendChild(newList[0].parentNode);
                     }
                 });
-            });
+                if (headList.children.length === 0) {
+                    parentItem.removeChild(headList);
+                }
+                if (parentItem.childNodes.length === 0) {
+                    parentItem.parentNode.removeChild(parentItem);
+                }
+            }
+            else {
+                var lastList = headList.childNodes.length > 1 ? dom.splitTree(headList, {
+                    node: last.parentNode,
+                    offset: dom.position(last) + 1
+                }, {
+                    isSkipPaddingBlankHTML: true
+                }) : null;
+                var middleList = dom.splitTree(headList, {
+                    node: head.parentNode,
+                    offset: dom.position(head)
+                }, {
+                    isSkipPaddingBlankHTML: true
+                });
+                paras = isEscapseToBody ? dom.listDescendant(middleList, dom.isLi)
+                    : lists.from(middleList.childNodes).filter(dom.isLi);
+                // LI to P
+                if (isEscapseToBody || !dom.isList(headList.parentNode)) {
+                    paras = paras.map(function (para) {
+                        return dom.replace(para, 'P');
+                    });
+                }
+                $$1.each(lists.from(paras).reverse(), function (idx, para) {
+                    dom.insertAfter(para, headList);
+                });
+                // remove empty lists
+                var rootLists = lists.compact([headList, middleList, lastList]);
+                $$1.each(rootLists, function (idx, rootList) {
+                    var listNodes = [rootList].concat(dom.listDescendant(rootList, dom.isList));
+                    $$1.each(listNodes.reverse(), function (idx, listNode) {
+                        if (!dom.nodeLength(listNode)) {
+                            dom.remove(listNode, true);
+                        }
+                    });
+                });
+            }
             releasedParas = releasedParas.concat(paras);
         });
         return releasedParas;
+    };
+    /**
+     * @method appendToPrevious
+     *
+     * Appends list to previous list item, if
+     * none exist it wraps the list in a new list item.
+     *
+     * @param {HTMLNode} ListItem
+     * @return {HTMLNode}
+     */
+    Bullet.prototype.appendToPrevious = function (node) {
+        return node.previousSibling
+            ? dom.appendChildNodes(node.previousSibling, [node])
+            : this.wrapList([node], 'LI');
+    };
+    /**
+     * @method findList
+     *
+     * Finds an existing list in list item
+     *
+     * @param {HTMLNode} ListItem
+     * @return {Array[]}
+     */
+    Bullet.prototype.findList = function (node) {
+        return node
+            ? lists.find(node.children, function (child) { return ['OL', 'UL'].indexOf(child.nodeName) > -1; })
+            : null;
+    };
+    /**
+     * @method findNextSiblings
+     *
+     * Finds all list item siblings that follow it
+     *
+     * @param {HTMLNode} ListItem
+     * @return {HTMLNode}
+     */
+    Bullet.prototype.findNextSiblings = function (node) {
+        var siblings = [];
+        while (node.nextSibling) {
+            siblings.push(node.nextSibling);
+            node = node.nextSibling;
+        }
+        return siblings;
     };
     return Bullet;
 }());
@@ -3606,9 +3740,10 @@ var Bullet = /** @class */ (function () {
  *
  */
 var Typing = /** @class */ (function () {
-    function Typing() {
+    function Typing(context) {
         // a Bullet instance to toggle lists off
         this.bullet = new Bullet();
+        this.options = context.options;
     }
     /**
      * insert tab
@@ -3625,9 +3760,17 @@ var Typing = /** @class */ (function () {
     };
     /**
      * insert paragraph
+     *
+     * @param {jQuery} $editable
+     * @param {WrappedRange} rng Can be used in unit tests to "mock" the range
+     *
+     * blockquoteBreakingLevel
+     *   0 - No break, the new paragraph remains inside the quote
+     *   1 - Break the first blockquote in the ancestors list
+     *   2 - Break all blockquotes, so that the new paragraph is not quoted (this is the default)
      */
-    Typing.prototype.insertParagraph = function (editable) {
-        var rng = range.create(editable);
+    Typing.prototype.insertParagraph = function (editable, rng) {
+        rng = rng || range.create(editable);
         // deleteContents on range.
         rng = rng.deleteContents();
         // Wrap range if it needs to be wrapped by paragraph
@@ -3642,24 +3785,43 @@ var Typing = /** @class */ (function () {
                 // toogle UL/OL and escape
                 this.bullet.toggleList(splitRoot.parentNode.nodeName);
                 return;
-                // if it is an empty line with para on blockquote
-            }
-            else if (dom.isEmpty(splitRoot) && dom.isPara(splitRoot) && dom.isBlockquote(splitRoot.parentNode)) {
-                // escape blockquote
-                dom.insertAfter(splitRoot, splitRoot.parentNode);
-                nextPara = splitRoot;
-                // if new line has content (not a line break)
             }
             else {
-                nextPara = dom.splitTree(splitRoot, rng.getStartPoint());
-                var emptyAnchors = dom.listDescendant(splitRoot, dom.isEmptyAnchor);
-                emptyAnchors = emptyAnchors.concat(dom.listDescendant(nextPara, dom.isEmptyAnchor));
-                $$1.each(emptyAnchors, function (idx, anchor) {
-                    dom.remove(anchor);
-                });
-                // replace empty heading, pre or custom-made styleTag with P tag
-                if ((dom.isHeading(nextPara) || dom.isPre(nextPara) || dom.isCustomStyleTag(nextPara)) && dom.isEmpty(nextPara)) {
-                    nextPara = dom.replace(nextPara, 'p');
+                var blockquote = null;
+                if (this.options.blockquoteBreakingLevel === 1) {
+                    blockquote = dom.ancestor(splitRoot, dom.isBlockquote);
+                }
+                else if (this.options.blockquoteBreakingLevel === 2) {
+                    blockquote = dom.lastAncestor(splitRoot, dom.isBlockquote);
+                }
+                if (blockquote) {
+                    // We're inside a blockquote and options ask us to break it
+                    nextPara = $$1(dom.emptyPara)[0];
+                    // If the split is right before a <br>, remove it so that there's no "empty line"
+                    // after the split in the new blockquote created
+                    if (dom.isRightEdgePoint(rng.getStartPoint()) && dom.isBR(rng.sc.nextSibling)) {
+                        $$1(rng.sc.nextSibling).remove();
+                    }
+                    var split = dom.splitTree(blockquote, rng.getStartPoint(), { isDiscardEmptySplits: true });
+                    if (split) {
+                        split.parentNode.insertBefore(nextPara, split);
+                    }
+                    else {
+                        dom.insertAfter(nextPara, blockquote); // There's no split if we were at the end of the blockquote
+                    }
+                }
+                else {
+                    nextPara = dom.splitTree(splitRoot, rng.getStartPoint());
+                    // not a blockquote, just insert the paragraph
+                    var emptyAnchors = dom.listDescendant(splitRoot, dom.isEmptyAnchor);
+                    emptyAnchors = emptyAnchors.concat(dom.listDescendant(nextPara, dom.isEmptyAnchor));
+                    $$1.each(emptyAnchors, function (idx, anchor) {
+                        dom.remove(anchor);
+                    });
+                    // replace empty heading, pre or custom-made styleTag with P tag
+                    if ((dom.isHeading(nextPara) || dom.isPre(nextPara) || dom.isCustomStyleTag(nextPara)) && dom.isEmpty(nextPara)) {
+                        nextPara = dom.replace(nextPara, 'p');
+                    }
                 }
             }
             // no paragraph: insert empty paragraph
@@ -4237,7 +4399,7 @@ var Editor = /** @class */ (function () {
         this.lastRange = null;
         this.style = new Style();
         this.table = new Table();
-        this.typing = new Typing();
+        this.typing = new Typing(context);
         this.bullet = new Bullet();
         this.history = new History(this.$editable);
         this.context.memo('help.undo', this.lang.help.undo);
@@ -4376,6 +4538,10 @@ var Editor = /** @class */ (function () {
             var linkText = linkInfo.text;
             var isNewWindow = linkInfo.isNewWindow;
             var rng = linkInfo.range || _this.createRange();
+            var additionalTextLength = linkText.length - rng.toString().length;
+            if (additionalTextLength > 0 && _this.isLimited(additionalTextLength)) {
+                return;
+            }
             var isTextChanged = rng.toString() !== linkText;
             // handle spaced urls from input
             if (typeof linkUrl === 'string') {
@@ -4385,9 +4551,12 @@ var Editor = /** @class */ (function () {
                 linkUrl = _this.options.onCreateLink(linkUrl);
             }
             else {
-                // if url doesn't match an URL schema, set http:// as default
-                linkUrl = /^[A-Za-z][A-Za-z0-9+-.]*\:[\/\/]?/.test(linkUrl)
-                    ? linkUrl : 'http://' + linkUrl;
+                // if url is not relative,
+                if (!/^\.?\/(.*)/.test(linkUrl)) {
+                    // if url doesn't match an URL schema, set http:// as default
+                    linkUrl = /^[A-Za-z][A-Za-z0-9+-.]*\:[\/\/]?/.test(linkUrl)
+                        ? linkUrl : 'http://' + linkUrl;
+                }
             }
             var anchors = [];
             if (isTextChanged) {
@@ -4527,7 +4696,7 @@ var Editor = /** @class */ (function () {
         this.$editable.html(dom.html(this.$note) || dom.emptyPara);
         this.$editable.on(env.inputEventName, func.debounce(function () {
             _this.context.triggerEvent('change', _this.$editable.html());
-        }, 100));
+        }, 10));
         this.$editor.on('focusin', function (event) {
             _this.context.triggerEvent('focusin', event);
         }).on('focusout', function (event) {
@@ -4672,6 +4841,14 @@ var Editor = /** @class */ (function () {
         this.history.undo();
         this.context.triggerEvent('change', this.$editable.html());
     };
+    /*
+    * commit
+    */
+    Editor.prototype.commit = function () {
+        this.context.triggerEvent('before.command', this.$editable.html());
+        this.history.commit();
+        this.context.triggerEvent('change', this.$editable.html());
+    };
     /**
      * redo
      */
@@ -4736,11 +4913,10 @@ var Editor = /** @class */ (function () {
      * run given function between beforeCommand and afterCommand
      */
     Editor.prototype.wrapCommand = function (fn) {
-        var _this = this;
         return function () {
-            _this.beforeCommand();
-            fn.apply(_this, arguments);
-            _this.afterCommand();
+            this.beforeCommand();
+            fn.apply(this, arguments);
+            this.afterCommand();
         };
     };
     /**
@@ -4775,7 +4951,7 @@ var Editor = /** @class */ (function () {
      * insertImages
      * @param {File[]} files
      */
-    Editor.prototype.insertImages = function (files) {
+    Editor.prototype.insertImagesAsDataURL = function (files) {
         var _this = this;
         $$1.each(files, function (idx, file) {
             var filename = file.name;
@@ -4790,21 +4966,6 @@ var Editor = /** @class */ (function () {
                 });
             }
         });
-    };
-    /**
-     * insertImagesOrCallback
-     * @param {File[]} files
-     */
-    Editor.prototype.insertImagesOrCallback = function (files) {
-        var callbacks = this.options.callbacks;
-        // If onImageUpload this.options setted
-        if (callbacks.onImageUpload) {
-            this.context.triggerEvent('image.upload', files);
-            // else insert Image as dataURL
-        }
-        else {
-            this.insertImages(files);
-        }
     };
     /**
      * return selected plain text
@@ -4886,8 +5047,9 @@ var Editor = /** @class */ (function () {
             text: rng.toString(),
             url: $anchor.length ? $anchor.attr('href') : ''
         };
-        // Define isNewWindow when anchor exists.
+        // When anchor exists,
         if ($anchor.length) {
+            // Set isNewWindow by checking its target.
             linkInfo.isNewWindow = $anchor.attr('target') === '_blank';
         }
         return linkInfo;
@@ -5379,7 +5541,7 @@ var Handle = /** @class */ (function () {
                     _this.$document.off('mousemove', onMouseMove_1);
                     _this.context.invoke('editor.afterCommand');
                 });
-                if (!$target_1.data('ratio')) {
+                if (!$target_1.data('ratio')) { // original ratio.
                     $target_1.data('ratio', $target_1.height() / $target_1.width());
                 }
             }
@@ -5443,7 +5605,7 @@ var Handle = /** @class */ (function () {
 }());
 
 var defaultScheme = 'http://';
-var linkPattern = /^([A-Za-z][A-Za-z0-9+-.]*\:[\/\/]?|mailto:[A-Z0-9._%+-]+@)?(www\.)?(.+)$/i;
+var linkPattern = /^([A-Za-z][A-Za-z0-9+-.]*\:[\/]{2}|mailto:[A-Z0-9._%+-]+@)?(www\.)?(.+)$/i;
 var AutoLink = /** @class */ (function () {
     function AutoLink(context) {
         var _this = this;
@@ -5474,6 +5636,9 @@ var AutoLink = /** @class */ (function () {
         if (match && (match[1] || match[2])) {
             var link = match[1] ? keyword : defaultScheme + keyword;
             var node = $$1('<a />').html(keyword).attr('href', link)[0];
+            if (this.context.options.linkTargetBlank) {
+                $$1(node).attr('target', '_blank');
+            }
             this.lastWordRange.insertNode(node);
             this.lastWordRange = null;
             this.context.invoke('editor.focus');
@@ -5599,6 +5764,159 @@ var Buttons = /** @class */ (function () {
         var genericFamilies = ['sans-serif', 'serif', 'monospace', 'cursive', 'fantasy'];
         name = name.toLowerCase();
         return ((name !== '') && this.isFontInstalled(name) && ($$1.inArray(name, genericFamilies) === -1));
+    };
+    Buttons.prototype.colorPalette = function (className, tooltip, backColor, foreColor) {
+        var _this = this;
+        return this.ui.buttonGroup({
+            className: 'note-color ' + className,
+            children: [
+                this.button({
+                    className: 'note-current-color-button',
+                    contents: this.ui.icon(this.options.icons.font + ' note-recent-color'),
+                    tooltip: tooltip,
+                    click: function (e) {
+                        var $button = $$1(e.currentTarget);
+                        if (backColor && foreColor) {
+                            _this.context.invoke('editor.color', {
+                                backColor: $button.attr('data-backColor'),
+                                foreColor: $button.attr('data-foreColor')
+                            });
+                        }
+                        else if (backColor) {
+                            _this.context.invoke('editor.color', {
+                                backColor: $button.attr('data-backColor')
+                            });
+                        }
+                        else if (foreColor) {
+                            _this.context.invoke('editor.color', {
+                                foreColor: $button.attr('data-foreColor')
+                            });
+                        }
+                    },
+                    callback: function ($button) {
+                        var $recentColor = $button.find('.note-recent-color');
+                        if (backColor) {
+                            $recentColor.css('background-color', '#FFFF00');
+                            $button.attr('data-backColor', '#FFFF00');
+                        }
+                        if (!foreColor) {
+                            $recentColor.css('color', 'transparent');
+                        }
+                    }
+                }),
+                this.button({
+                    className: 'dropdown-toggle',
+                    contents: this.ui.dropdownButtonContents('', this.options),
+                    tooltip: this.lang.color.more,
+                    data: {
+                        toggle: 'dropdown'
+                    }
+                }),
+                this.ui.dropdown({
+                    items: (backColor ? [
+                        '<div class="note-palette">',
+                        '  <div class="note-palette-title">' + this.lang.color.background + '</div>',
+                        '  <div>',
+                        '    <button type="button" class="note-color-reset btn btn-light" data-event="backColor" data-value="inherit">',
+                        this.lang.color.transparent,
+                        '    </button>',
+                        '  </div>',
+                        '  <div class="note-holder" data-event="backColor"/>',
+                        '  <div>',
+                        '    <button type="button" class="note-color-select btn" data-event="openPalette" data-value="backColorPicker">',
+                        this.lang.color.cpSelect,
+                        '    </button>',
+                        '    <input type="color" id="backColorPicker" class="note-btn note-color-select-btn" value="#FFFF00" data-event="backColorPalette">',
+                        '  </div>',
+                        '  <div class="note-holder-custom" id="backColorPalette" data-event="backColor"/>',
+                        '</div>'
+                    ].join('') : '') +
+                        (foreColor ? [
+                            '<div class="note-palette">',
+                            '  <div class="note-palette-title">' + this.lang.color.foreground + '</div>',
+                            '  <div>',
+                            '    <button type="button" class="note-color-reset btn btn-light" data-event="removeFormat" data-value="foreColor">',
+                            this.lang.color.resetToDefault,
+                            '    </button>',
+                            '  </div>',
+                            '  <div class="note-holder" data-event="foreColor"/>',
+                            '  <div>',
+                            '    <button type="button" class="note-color-select btn" data-event="openPalette" data-value="foreColorPicker">',
+                            this.lang.color.cpSelect,
+                            '    </button>',
+                            '    <input type="color" id="foreColorPicker" class="note-btn note-color-select-btn" value="#000000" data-event="foreColorPalette">',
+                            '  <div class="note-holder-custom" id="foreColorPalette" data-event="foreColor"/>',
+                            '</div>'
+                        ].join('') : ''),
+                    callback: function ($dropdown) {
+                        $dropdown.find('.note-holder').each(function (idx, item) {
+                            var $holder = $$1(item);
+                            $holder.append(_this.ui.palette({
+                                colors: _this.options.colors,
+                                colorsName: _this.options.colorsName,
+                                eventName: $holder.data('event'),
+                                container: _this.options.container,
+                                tooltip: _this.options.tooltip
+                            }).render());
+                        });
+                        /* TODO: do we have to record recent custom colors within cookies? */
+                        var customColors = [
+                            ['#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF']
+                        ];
+                        $dropdown.find('.note-holder-custom').each(function (idx, item) {
+                            var $holder = $$1(item);
+                            $holder.append(_this.ui.palette({
+                                colors: customColors,
+                                colorsName: customColors,
+                                eventName: $holder.data('event'),
+                                container: _this.options.container,
+                                tooltip: _this.options.tooltip
+                            }).render());
+                        });
+                        $dropdown.find('input[type=color]').each(function (idx, item) {
+                            $$1(item).change(function () {
+                                var $chip = $dropdown.find('#' + $$1(this).data('event')).find('.note-color-btn').first();
+                                var color = this.value.toUpperCase();
+                                $chip.css('background-color', color)
+                                    .attr('aria-label', color)
+                                    .attr('data-value', color)
+                                    .attr('data-original-title', color);
+                                $chip.click();
+                            });
+                        });
+                    },
+                    click: function (event) {
+                        event.stopPropagation();
+                        var $parent = $$1('.' + className);
+                        var $button = $$1(event.target);
+                        var eventName = $button.data('event');
+                        var value = $button.attr('data-value');
+                        if (eventName === 'openPalette') {
+                            var $picker = $parent.find('#' + value);
+                            var $palette = $$1($parent.find('#' + $picker.data('event')).find('.note-color-row')[0]);
+                            // Shift palette chips
+                            var $chip = $palette.find('.note-color-btn').last().detach();
+                            // Set chip attributes
+                            var color = $picker.val();
+                            $chip.css('background-color', color)
+                                .attr('aria-label', color)
+                                .attr('data-value', color)
+                                .attr('data-original-title', color);
+                            $palette.prepend($chip);
+                            $picker.click();
+                        }
+                        else if (lists.contains(['backColor', 'foreColor'], eventName)) {
+                            var key = eventName === 'backColor' ? 'background-color' : 'color';
+                            var $color = $button.closest('.note-color').find('.note-recent-color');
+                            var $currentButton = $button.closest('.note-color').find('.note-current-color-button');
+                            $color.css(key, value);
+                            $currentButton.attr('data-' + eventName, value);
+                            _this.context.invoke('editor.' + eventName, value);
+                        }
+                    }
+                })
+            ]
+        }).render();
     };
     Buttons.prototype.addToolbarButtons = function () {
         var _this = this;
@@ -5752,83 +6070,13 @@ var Buttons = /** @class */ (function () {
             ]).render();
         });
         this.context.memo('button.color', function () {
-            return _this.ui.buttonGroup({
-                className: 'note-color',
-                children: [
-                    _this.button({
-                        className: 'note-current-color-button',
-                        contents: _this.ui.icon(_this.options.icons.font + ' note-recent-color'),
-                        tooltip: _this.lang.color.recent,
-                        click: function (e) {
-                            var $button = $$1(e.currentTarget);
-                            _this.context.invoke('editor.color', {
-                                backColor: $button.attr('data-backColor'),
-                                foreColor: $button.attr('data-foreColor')
-                            });
-                        },
-                        callback: function ($button) {
-                            var $recentColor = $button.find('.note-recent-color');
-                            $recentColor.css('background-color', '#FFFF00');
-                            $button.attr('data-backColor', '#FFFF00');
-                        }
-                    }),
-                    _this.button({
-                        className: 'dropdown-toggle',
-                        contents: _this.ui.dropdownButtonContents('', _this.options),
-                        tooltip: _this.lang.color.more,
-                        data: {
-                            toggle: 'dropdown'
-                        }
-                    }),
-                    _this.ui.dropdown({
-                        items: [
-                            '<div class="note-palette">',
-                            '  <div class="note-palette-title">' + _this.lang.color.background + '</div>',
-                            '  <div>',
-                            '    <button type="button" class="note-color-reset btn btn-light" data-event="backColor" data-value="inherit">',
-                            _this.lang.color.transparent,
-                            '    </button>',
-                            '  </div>',
-                            '  <div class="note-holder" data-event="backColor"/>',
-                            '</div>',
-                            '<div class="note-palette">',
-                            '  <div class="note-palette-title">' + _this.lang.color.foreground + '</div>',
-                            '  <div>',
-                            '    <button type="button" class="note-color-reset btn btn-light" data-event="removeFormat" data-value="foreColor">',
-                            _this.lang.color.resetToDefault,
-                            '    </button>',
-                            '  </div>',
-                            '  <div class="note-holder" data-event="foreColor"/>',
-                            '</div>'
-                        ].join(''),
-                        callback: function ($dropdown) {
-                            $dropdown.find('.note-holder').each(function (idx, item) {
-                                var $holder = $$1(item);
-                                $holder.append(_this.ui.palette({
-                                    colors: _this.options.colors,
-                                    colorsName: _this.options.colorsName,
-                                    eventName: $holder.data('event'),
-                                    container: _this.options.container,
-                                    tooltip: _this.options.tooltip
-                                }).render());
-                            });
-                        },
-                        click: function (event) {
-                            var $button = $$1(event.target);
-                            var eventName = $button.data('event');
-                            var value = $button.data('value');
-                            if (eventName && value) {
-                                var key = eventName === 'backColor' ? 'background-color' : 'color';
-                                var $color = $button.closest('.note-color').find('.note-recent-color');
-                                var $currentButton = $button.closest('.note-color').find('.note-current-color-button');
-                                $color.css(key, value);
-                                $currentButton.attr('data-' + eventName, value);
-                                _this.context.invoke('editor.' + eventName, value);
-                            }
-                        }
-                    })
-                ]
-            }).render();
+            return _this.colorPalette('note-color-all', _this.lang.color.recent, true, true);
+        });
+        this.context.memo('button.forecolor', function () {
+            return _this.colorPalette('note-color-fore', _this.lang.color.foreground, false, true);
+        });
+        this.context.memo('button.backcolor', function () {
+            return _this.colorPalette('note-color-back', _this.lang.color.background, true, false);
         });
         this.context.memo('button.ul', function () {
             return _this.button({
@@ -6428,7 +6676,7 @@ var LinkDialog = /** @class */ (function () {
             '</div>',
             !this.options.disableLinkTarget
                 ? $$1('<div/>').append(this.ui.checkbox({
-                    id: 'sn-checkbox-open-in-new-window',
+                    className: 'sn-checkbox-open-in-new-window',
                     text: this.lang.link.openInNewWindow,
                     checked: true
                 }).render()).html()
@@ -6474,7 +6722,8 @@ var LinkDialog = /** @class */ (function () {
             var $linkText = _this.$dialog.find('.note-link-text');
             var $linkUrl = _this.$dialog.find('.note-link-url');
             var $linkBtn = _this.$dialog.find('.note-link-btn');
-            var $openInNewWindow = _this.$dialog.find('input[type=checkbox]');
+            var $openInNewWindow = _this.$dialog
+                .find('.sn-checkbox-open-in-new-window input[type=checkbox]');
             _this.ui.onDialogShown(_this.$dialog, function () {
                 _this.context.triggerEvent('dialog.shown');
                 // if no url was given, copy text to url
@@ -6508,9 +6757,9 @@ var LinkDialog = /** @class */ (function () {
                 _this.toggleLinkBtn($linkBtn, $linkText, $linkUrl);
                 _this.bindEnterKey($linkUrl, $linkBtn);
                 _this.bindEnterKey($linkText, $linkBtn);
-                var isChecked = linkInfo.isNewWindow !== undefined
+                var isNewWindowChecked = linkInfo.isNewWindow !== undefined
                     ? linkInfo.isNewWindow : _this.context.options.linkTargetBlank;
-                $openInNewWindow.prop('checked', isChecked);
+                $openInNewWindow.prop('checked', isNewWindowChecked);
                 $linkBtn.one('click', function (event) {
                     event.preventDefault();
                     deferred.resolve({
@@ -6670,11 +6919,24 @@ var ImageDialog = /** @class */ (function () {
             // [workaround] hide dialog before restore range for IE range focus
             _this.ui.hideDialog(_this.$dialog);
             _this.context.invoke('editor.restoreRange');
-            if (typeof data === 'string') {
-                _this.context.invoke('editor.insertImage', data);
+            if (typeof data === 'string') { // image url
+                // If onImageLinkInsert set,
+                if (_this.options.callbacks.onImageLinkInsert) {
+                    _this.context.triggerEvent('image.link.insert', data);
+                }
+                else {
+                    _this.context.invoke('editor.insertImage', data);
+                }
             }
-            else {
-                _this.context.invoke('editor.insertImagesOrCallback', data);
+            else { // array of files
+                // If onImageUpload set,
+                if (_this.options.callbacks.onImageUpload) {
+                    _this.context.triggerEvent('image.upload', data);
+                }
+                else {
+                    // else insert Image as dataURL
+                    _this.context.invoke('editor.insertImagesAsDataURL', data);
+                }
             }
         }).fail(function () {
             _this.context.invoke('editor.restoreRange');
@@ -6875,7 +7137,8 @@ var VideoDialog = /** @class */ (function () {
     };
     VideoDialog.prototype.createVideoNode = function (url) {
         // video url patterns(youtube, instagram, vimeo, dailymotion, youku, mp4, ogg, webm)
-        var ytRegExp = /^(?:https?:\/\/)?(?:www\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})(?:\S+)?$/;
+        var ytRegExp = /^(?:https?:\/\/)?(?:www\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w|-]{11})(?:(?:[\?&]t=)(\S+))?$/;
+        var ytRegExpForStart = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/;
         var ytMatch = url.match(ytRegExp);
         var igRegExp = /(?:www\.|\/\/)instagram\.com\/p\/(.[a-zA-Z0-9_-]*)/;
         var igMatch = url.match(igRegExp);
@@ -6900,9 +7163,18 @@ var VideoDialog = /** @class */ (function () {
         var $video;
         if (ytMatch && ytMatch[1].length === 11) {
             var youtubeId = ytMatch[1];
+            var start = 0;
+            if (typeof ytMatch[2] !== 'undefined') {
+                var ytMatchForStart = ytMatch[2].match(ytRegExpForStart);
+                if (ytMatchForStart) {
+                    for (var n = [3600, 60, 1], i = 0, r = n.length; i < r; i++) {
+                        start += (typeof ytMatchForStart[i + 1] !== 'undefined' ? n[i] * parseInt(ytMatchForStart[i + 1], 10) : 0);
+                    }
+                }
+            }
             $video = $$1('<iframe>')
                 .attr('frameborder', 0)
-                .attr('src', '//www.youtube.com/embed/' + youtubeId)
+                .attr('src', '//www.youtube.com/embed/' + youtubeId + (start > 0 ? '?start=' + start : ''))
                 .attr('width', '640').attr('height', '360');
         }
         else if (igMatch && igMatch[0].length) {
@@ -7189,9 +7461,9 @@ var HintPopover = /** @class */ (function () {
         }).render().appendTo(this.options.container);
         this.$popover.hide();
         this.$content = this.$popover.find('.popover-content,.note-popover-content');
-        this.$content.on('click', '.note-hint-item', function () {
+        this.$content.on('click', '.note-hint-item', function (e) {
             _this.$content.find('.active').removeClass('active');
-            $$1(_this).addClass('active');
+            $$1(e.currentTarget).addClass('active');
             _this.replace();
         });
     };
@@ -7660,6 +7932,7 @@ $$1.summernote = $$1.extend($$1.summernote, {
         airMode: false,
         width: null,
         height: null,
+        linkTargetBlank: true,
         focus: false,
         tabSize: 4,
         styleWithSpan: true,
@@ -7669,6 +7942,7 @@ $$1.summernote = $$1.extend($$1.summernote, {
         tooltip: 'auto',
         container: 'body',
         maxTextLength: 0,
+        blockquoteBreakingLevel: 2,
         styleTags: ['p', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
         fontNames: [
             'Arial', 'Arial Black', 'Comic Sans MS', 'Courier New',
@@ -7717,7 +7991,8 @@ $$1.summernote = $$1.extend($$1.summernote, {
             onKeydown: null,
             onSubmit: null,
             onImageUpload: null,
-            onImageUploadError: null
+            onImageUploadError: null,
+            onImageLinkInsert: null
         },
         codemirror: {
             mode: 'text/html',
